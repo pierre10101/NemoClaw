@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 //
-// Interactive onboarding wizard — 8 steps from zero to running sandbox.
+// Interactive onboarding wizard — 9 steps from zero to running sandbox.
 // Supports non-interactive mode via --non-interactive flag or
 // NEMOCLAW_NON_INTERACTIVE=1 env var for CI/CD pipelines.
 
@@ -1828,7 +1828,7 @@ function getNonInteractiveModel(providerKey) {
 
 // eslint-disable-next-line complexity
 async function preflight() {
-  step(1, 8, "Preflight checks");
+  step(1, 9, "Preflight checks");
 
   const host = assessHost();
 
@@ -2123,7 +2123,7 @@ async function preflight() {
 // ── Step 2: Gateway ──────────────────────────────────────────────
 
 async function startGatewayWithOptions(_gpu, { exitOnFailure = true } = {}) {
-  step(2, 8, "Starting OpenShell gateway");
+  step(2, 9, "Starting OpenShell gateway");
 
   const gatewayStatus = runCaptureOpenshell(["status"], { ignoreError: true });
   const gwInfo = runCaptureOpenshell(["gateway", "info", "-g", GATEWAY_NAME], {
@@ -2405,7 +2405,67 @@ async function promptValidatedSandboxName() {
   process.exit(1);
 }
 
-// ── Step 5: Sandbox ──────────────────────────────────────────────
+// ── Step 6: Provider selection ───────────────────────────────────
+
+/** Prompt user to select which OpenShell providers to attach to the sandbox.
+ *  In non-interactive mode, attaches all configured providers.
+ *  Returns an array of selected provider names. */
+async function selectOpenshellProviders() {
+  const providersOutput = runCaptureOpenshell(["provider", "list"], { ignoreError: true });
+  if (!providersOutput) {
+    note("  No providers configured — skipping provider attachment.");
+    return [];
+  }
+
+  // Strip ANSI codes and parse the first whitespace-delimited token per line
+  // (the provider name). Slice off the header row.
+  const ansiRe = /\x1B\[[0-?]*[ -/]*[@-~]/g;
+  const providers = providersOutput
+    .replace(ansiRe, "")
+    .split("\n")
+    .slice(1)
+    .map((line) => line.trim().split(/\s+/)[0])
+    .filter((name) => name && name.length > 0 && !name.startsWith("["));
+
+  if (providers.length === 0) {
+    note("  No providers configured — skipping provider attachment.");
+    return [];
+  }
+
+  if (isNonInteractive()) {
+    note(`  [non-interactive] Attaching all providers: ${providers.join(", ")}`);
+    return providers;
+  }
+
+  // Interactive: numbered list, comma-separated selection, empty or 'all' → all.
+  console.log("");
+  console.log("  Available OpenShell providers:");
+  providers.forEach((p, i) => {
+    console.log(`    ${i + 1}. ${p}`);
+  });
+  console.log("");
+
+  const answer = await prompt("  Select providers to attach (comma-separated numbers, or 'all'): ");
+  const input = answer.trim().toLowerCase();
+
+  if (input === "all" || input === "") {
+    return providers;
+  }
+
+  const indices = input
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !isNaN(n) && n >= 1 && n <= providers.length);
+
+  if (indices.length === 0) {
+    console.log("  No valid selection — attaching all providers");
+    return providers;
+  }
+
+  return indices.map((i) => providers[i - 1]);
+}
+
+// ── Step 7: Sandbox ──────────────────────────────────────────────
 
 // eslint-disable-next-line complexity
 async function createSandbox(
@@ -2419,8 +2479,9 @@ async function createSandbox(
   fromDockerfile = null,
   agent = null,
   dangerouslySkipPermissions = false,
+  selectedProviders = [],
 ) {
-  step(6, 8, "Creating sandbox");
+  step(7, 9, "Creating sandbox");
 
   const sandboxName = sandboxNameOverride || (await promptValidatedSandboxName());
   const effectivePort = agent ? agent.forwardPort : CONTROL_UI_PORT;
@@ -2609,6 +2670,12 @@ async function createSandbox(
   const messagingProviders = upsertMessagingProviders(messagingTokenDefs);
   for (const p of messagingProviders) {
     createArgs.push("--provider", p);
+  }
+
+  // Attach selected OpenShell providers so their credentials are available
+  // in the sandbox (e.g., GITHUB_TOKEN from the github provider).
+  for (const providerName of selectedProviders) {
+    createArgs.push("--provider", providerName);
   }
 
   console.log(`  Creating sandbox '${sandboxName}' (this takes a few minutes on first run)...`);
@@ -2895,7 +2962,7 @@ async function createSandbox(
 
 // eslint-disable-next-line complexity
 async function setupNim(gpu) {
-  step(3, 8, "Configuring inference (NIM)");
+  step(3, 9, "Configuring inference (NIM)");
 
   let model = null;
   let provider = REMOTE_PROVIDER_CONFIG.build.providerName;
@@ -3532,7 +3599,7 @@ async function setupInference(
   endpointUrl = null,
   credentialEnv = null,
 ) {
-  step(4, 8, "Setting up inference provider");
+  step(4, 9, "Setting up inference provider");
   runOpenshell(["gateway", "select", GATEWAY_NAME], { ignoreError: true });
 
   if (
@@ -3725,7 +3792,7 @@ const MESSAGING_CHANNELS = [
 ];
 
 async function setupMessagingChannels() {
-  step(5, 8, "Messaging channels");
+  step(5, 9, "Messaging channels");
 
   const getMessagingToken = (envKey) =>
     getCredential(envKey) || normalizeCredentialValue(process.env[envKey]) || null;
@@ -3941,7 +4008,7 @@ function getSuggestedPolicyPresets({ enabledChannels = null, webSearchConfig = n
 // ── Step 7: OpenClaw ─────────────────────────────────────────────
 
 async function setupOpenclaw(sandboxName, model, provider) {
-  step(7, 8, "Setting up OpenClaw inside sandbox");
+  step(8, 9, "Setting up OpenClaw inside sandbox");
 
   const selectionConfig = getProviderSelectionConfig(provider, model);
   if (selectionConfig) {
@@ -3968,7 +4035,7 @@ async function setupOpenclaw(sandboxName, model, provider) {
 
 // eslint-disable-next-line complexity
 async function _setupPolicies(sandboxName, options = {}) {
-  step(8, 8, "Policy presets");
+  step(9, 9, "Policy presets");
   const suggestions = getSuggestedPolicyPresets(options);
 
   const allPresets = policies.listPresets();
@@ -4517,7 +4584,7 @@ async function setupPoliciesWithSelection(sandboxName, options = {}) {
   const webSearchConfig = options.webSearchConfig || null;
   const enabledChannels = Array.isArray(options.enabledChannels) ? options.enabledChannels : null;
 
-  step(8, 8, "Policy presets");
+  step(9, 9, "Policy presets");
 
   const allPresets = policies.listPresets();
   const applied = policies.getAppliedPresets(sandboxName);
@@ -4906,15 +4973,16 @@ const ONBOARD_STEP_INDEX = {
   provider_selection: { number: 3, title: "Configuring inference (NIM)" },
   inference: { number: 4, title: "Setting up inference provider" },
   messaging: { number: 5, title: "Messaging channels" },
-  sandbox: { number: 6, title: "Creating sandbox" },
-  openclaw: { number: 7, title: "Setting up OpenClaw inside sandbox" },
-  policies: { number: 8, title: "Policy presets" },
+  openshell_providers: { number: 6, title: "Selecting providers to attach" },
+  sandbox: { number: 7, title: "Creating sandbox" },
+  openclaw: { number: 8, title: "Setting up OpenClaw inside sandbox" },
+  policies: { number: 9, title: "Policy presets" },
 };
 
 function skippedStepMessage(stepName, detail, reason = "resume") {
   const stepInfo = ONBOARD_STEP_INDEX[stepName];
   if (stepInfo) {
-    step(stepInfo.number, 8, stepInfo.title);
+    step(stepInfo.number, 9, stepInfo.title);
   }
   const prefix = reason === "reuse" ? "[reuse]" : "[resume]";
   console.log(`  ${prefix} Skipping ${stepName}${detail ? ` (${detail})` : ""}`);
@@ -5258,6 +5326,11 @@ async function onboard(opts = {}) {
         current.messagingChannels = selectedMessagingChannels;
         return current;
       });
+
+      // Step 6: Select OpenShell providers to attach
+      step(6, 9, "Selecting providers to attach");
+      const selectedProviders = await selectOpenshellProviders();
+
       sandboxName = await createSandbox(
         gpu,
         model,
@@ -5269,6 +5342,7 @@ async function onboard(opts = {}) {
         fromDockerfile,
         agent,
         dangerouslySkipPermissions,
+        selectedProviders,
       );
       // Persist model and provider after the sandbox entry exists in the registry.
       // updateSandbox() silently no-ops when the entry is missing, so this must
@@ -5306,7 +5380,7 @@ async function onboard(opts = {}) {
       ? session.policyPresets
       : null;
     if (dangerouslySkipPermissions) {
-      step(8, 8, "Policy presets");
+      step(9, 9, "Policy presets");
       policies.applyPermissivePolicy(sandboxName);
       onboardSession.markStepComplete("policies", {
         sandboxName,
@@ -5415,6 +5489,7 @@ module.exports = {
   getDashboardGuidanceLines,
   startGatewayForRecovery,
   runCaptureOpenshell,
+  selectOpenshellProviders,
   setupInference,
   setupMessagingChannels,
   setupNim,

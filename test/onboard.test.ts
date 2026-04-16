@@ -2010,7 +2010,7 @@ const { setupInference } = require(${onboardPath});
 
     assert.match(
       source,
-      /startRecordedStep\("sandbox", \{ sandboxName, provider, model \}\);\s*selectedMessagingChannels = await setupMessagingChannels\(\);\s*onboardSession\.updateSession\(\(current\) => \{\s*current\.messagingChannels = selectedMessagingChannels;\s*return current;\s*\}\);\s*sandboxName = await createSandbox\(\s*gpu,\s*model,\s*provider,\s*preferredInferenceApi,\s*sandboxName,\s*webSearchConfig,\s*selectedMessagingChannels,\s*fromDockerfile,\s*agent,\s*dangerouslySkipPermissions,\s*\);/,
+      /startRecordedStep\("sandbox", \{ sandboxName, provider, model \}\);\s*selectedMessagingChannels = await setupMessagingChannels\(\);\s*onboardSession\.updateSession\(\(current\) => \{\s*current\.messagingChannels = selectedMessagingChannels;\s*return current;\s*\}\);\s*\/\/ Step 6[\s\S]*?const selectedProviders = await selectOpenshellProviders\(\);\s*sandboxName = await createSandbox\(\s*gpu,\s*model,\s*provider,\s*preferredInferenceApi,\s*sandboxName,\s*webSearchConfig,\s*selectedMessagingChannels,\s*fromDockerfile,\s*agent,\s*dangerouslySkipPermissions,\s*selectedProviders,\s*\);/,
     );
   });
 
@@ -2022,7 +2022,7 @@ const { setupInference } = require(${onboardPath});
 
     assert.match(source, /const ONBOARD_STEP_INDEX = \{/);
     assert.match(source, /function skippedStepMessage\(stepName, detail, reason = "resume"\)/);
-    assert.match(source, /step\(stepInfo\.number, 8, stepInfo\.title\);/);
+    assert.match(source, /step\(stepInfo\.number, 9, stepInfo\.title\);/);
     assert.match(source, /skippedStepMessage\("openclaw", sandboxName\)/);
     assert.match(
       source,
@@ -2041,7 +2041,7 @@ const { setupInference } = require(${onboardPath});
     // the base policy from sandbox create stays in Pending status (#897).
     assert.match(
       source,
-      /if \(dangerouslySkipPermissions\) \{\s*step\(8, 8, "Policy presets"\);\s*policies\.applyPermissivePolicy\(sandboxName\);/,
+      /if \(dangerouslySkipPermissions\) \{\s*step\(9, 9, "Policy presets"\);\s*policies\.applyPermissivePolicy\(sandboxName\);/,
     );
     // Must NOT just print a skip message without activating the policy.
     assert.doesNotMatch(
