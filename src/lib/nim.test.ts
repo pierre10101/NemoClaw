@@ -77,10 +77,11 @@ describe("nim", () => {
       }
     });
 
-    it("nvidia type is nimCapable", () => {
+    it("nvidia type has boolean nimCapable determined by VRAM", () => {
       const gpu = nim.detectGpu();
       if (gpu && gpu.type === "nvidia") {
-        expect(gpu.nimCapable).toBe(true);
+        expect(typeof gpu.nimCapable).toBe("boolean");
+        expect(gpu.nimCapable).toBe(nim.canRunNimWithMemory(gpu.totalMemoryMB));
       }
     });
 
